@@ -4,214 +4,187 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Asker Notları</title>
-
 <style>
-body{
-font-family:Arial;
-max-width:500px;
-margin:auto;
-padding:10px;
-}
-
-input,textarea,button{
-width:100%;
-margin:6px 0;
-font-size:16px;
-padding:8px;
-box-sizing:border-box;
-}
-
-img{
-max-width:100%;
-margin-top:8px;
-}
-
-.card{
-border:1px solid #ccc;
-padding:10px;
-margin:10px 0;
-}
+body{font-family:Arial;max-width:500px;margin:auto;padding:10px}
+input,textarea,button{width:100%;margin:6px 0;font-size:16px;padding:8px;box-sizing:border-box}
+img{max-width:100%;margin-top:8px}
+.card{border:1px solid #ccc;padding:10px;margin:10px 0}
 </style>
 </head>
-
 <body>
+
+<div id="login">
+<h2>Giriş</h2>
+<input id="password" type="password" placeholder="Şifre">
+<button onclick="login()">Giriş</button>
+</div>
+
+<div id="app" style="display:none;">
 
 <h2>Asker Notları</h2>
 
 <input id="name" placeholder="İsim">
-
 <textarea id="note" rows="4" placeholder="Not yaz"></textarea>
-
 <input id="photo" type="file" accept="image/*">
-
-<button onclick="uploadPost()">
-Yükle
-</button>
+<button onclick="uploadPost()">Yükle</button>
 
 <hr>
+<div id="posts">Yükleniyor...</div>
 
-<div id="posts">
-Yükleniyor...
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <script>
-const SUPABASE_URL =
-"https://jzsavjbjbwdqcswkyayv.supabase.co";
+const SUPABASE_URL = "https://jzsavjbjbwdqcswkyayv.supabase.co";
+const SUPABASE_KEY = "sb_publishable_n81KiQgIF7qFJhyR1T8GEA_jInAKK7P";
 
-const SUPABASE_KEY =
-"sb_publishable_n81KiQgIF7qFJhyR1T8GEA_jInAKK7P";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const db =
-supabase.createClient(
-SUPABASE_URL,
-SUPABASE_KEY
-);
+async function login(){
+  const password = document.getElementById("password").value;
+
+  const res = await db.rpc("check_site_password", {
+    input_password: password
+  });
+
+  if(res.error){
+    alert(res.error.message);
+    return;
+  }
+
+  if(res.data === true){
+    sessionStorage.setItem("askerAuth","1");
+    showApp();
+  } else {
+    alert("Yanlış şifre");
+  }
+}
+
+function showApp(){
+  document.getElementById("login").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  loadPosts();
+}
+
+if(sessionStorage.getItem("askerAuth") === "1"){
+  showApp();
+}
 
 async function compressImage(file){
-return new Promise(function(resolve){
-const img = new Image();
-const reader = new FileReader();
+  return new Promise(function(resolve){
+    const img = new Image();
+    const reader = new FileReader();
 
-reader.onload = function(e){
-img.onload = function(){
+    reader.onload = function(e){
+      img.onload = function(){
+        const maxSize = 320;
+        let w = img.width;
+        let h = img.height;
 
-const maxSize = 320;
-let w = img.width;
-let h = img.height;
+        if(w > h && w > maxSize){
+          h = Math.round(h * maxSize / w);
+          w = maxSize;
+        } else if(h > maxSize){
+          w = Math.round(w * maxSize / h);
+          h = maxSize;
+        }
 
-if(w > h && w > maxSize){
-h = Math.round(h * maxSize / w);
-w = maxSize;
-}
-else if(h > maxSize){
-w = Math.round(w * maxSize / h);
-h = maxSize;
-}
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
 
-const canvas =
-document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img,0,0,w,h);
 
-canvas.width = w;
-canvas.height = h;
+        canvas.toBlob(function(blob){
+          resolve(blob);
+        },"image/jpeg",0.45);
+      };
 
-const ctx =
-canvas.getContext("2d");
+      img.src = e.target.result;
+    };
 
-ctx.drawImage(img,0,0,w,h);
-
-canvas.toBlob(function(blob){
-resolve(blob);
-},"image/jpeg",0.45);
-
-};
-
-img.src = e.target.result;
-};
-
-reader.readAsDataURL(file);
-});
+    reader.readAsDataURL(file);
+  });
 }
 
 async function uploadPost(){
+  const name = document.getElementById("name").value;
+  const note = document.getElementById("note").value;
+  const file = document.getElementById("photo").files[0];
 
-const name =
-document.getElementById("name").value;
+  let photoUrl = "";
 
-const note =
-document.getElementById("note").value;
+  if(file){
+    const smallPhoto = await compressImage(file);
+    const filename = Date.now() + ".jpg";
 
-const file =
-document.getElementById("photo").files[0];
+    const upload = await db.storage
+      .from("photos")
+      .upload(filename, smallPhoto, {
+        contentType:"image/jpeg"
+      });
 
-let photoUrl = "";
+    if(upload.error){
+      alert(upload.error.message);
+      return;
+    }
 
-if(file){
+    photoUrl = db.storage
+      .from("photos")
+      .getPublicUrl(filename)
+      .data.publicUrl;
+  }
 
-const smallPhoto =
-await compressImage(file);
+  const insert = await db
+    .from("posts")
+    .insert({
+      name:name,
+      note:note,
+      photo_url:photoUrl
+    });
 
-const filename =
-Date.now() + ".jpg";
+  if(insert.error){
+    alert(insert.error.message);
+    return;
+  }
 
-const upload =
-await db.storage
-.from("photos")
-.upload(filename,smallPhoto,{
-contentType:"image/jpeg"
-});
-
-if(upload.error){
-alert(upload.error.message);
-return;
-}
-
-photoUrl =
-db.storage
-.from("photos")
-.getPublicUrl(filename)
-.data.publicUrl;
-}
-
-const insert =
-await db
-.from("posts")
-.insert({
-name:name,
-note:note,
-photo_url:photoUrl
-});
-
-if(insert.error){
-alert(insert.error.message);
-return;
-}
-
-location.reload();
+  location.reload();
 }
 
 function escapeHtml(text){
-return String(text).replace(/[&<>"']/g,function(m){
-return {
-"&":"&amp;",
-"<":"&lt;",
-">":"&gt;",
-'"':"&quot;",
-"'":"&#039;"
-}[m];
-});
+  return String(text).replace(/[&<>"']/g,function(m){
+    return {
+      "&":"&amp;",
+      "<":"&lt;",
+      ">":"&gt;",
+      '"':"&quot;",
+      "'":"&#039;"
+    }[m];
+  });
 }
 
 async function loadPosts(){
+  const res = await db
+    .from("posts")
+    .select("*")
+    .order("created_at",{ascending:false});
 
-const res =
-await db
-.from("posts")
-.select("*")
-.order("created_at",{ascending:false});
+  if(res.error){
+    posts.innerHTML = res.error.message;
+    return;
+  }
 
-if(res.error){
-posts.innerHTML =
-res.error.message;
-return;
+  posts.innerHTML = res.data.map(function(p){
+    return `
+      <div class="card">
+        <b>${escapeHtml(p.name || "")}</b>
+        <p>${escapeHtml(p.note || "")}</p>
+        ${p.photo_url ? `<img src="${p.photo_url}">` : ""}
+      </div>
+    `;
+  }).join("");
 }
-
-posts.innerHTML =
-res.data.map(function(p){
-
-return `
-<div class="card">
-<b>${escapeHtml(p.name || "")}</b>
-<p>${escapeHtml(p.note || "")}</p>
-${p.photo_url ? `<img src="${p.photo_url}">` : ""}
-</div>
-`;
-
-}).join("");
-}
-
-loadPosts();
 </script>
 
 </body>
