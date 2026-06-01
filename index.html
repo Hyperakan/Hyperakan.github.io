@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Asker Notları</title>
+
+<style>
+body{
+font-family:Arial;
+max-width:500px;
+margin:auto;
+padding:10px;
+}
+
+input,textarea,button{
+width:100%;
+margin:6px 0;
+font-size:16px;
+padding:8px;
+box-sizing:border-box;
+}
+
+img{
+max-width:100%;
+margin-top:8px;
+}
+
+.card{
+border:1px solid #ccc;
+padding:10px;
+margin:10px 0;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Asker Notları</h2>
+
+<input id="name" placeholder="İsim">
+
+<textarea id="note" rows="4" placeholder="Not yaz"></textarea>
+
+<input id="photo" type="file" accept="image/*">
+
+<button onclick="uploadPost()">
+Yükle
+</button>
+
+<hr>
+
+<div id="posts">
+Yükleniyor...
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+
+const SUPABASE_URL =
+"https://jzsavjbjbwdqcswkyayv.supabase.co";
+
+const SUPABASE_KEY =
+"sb_publishable_n81KiQgIF7qFJhyR1T8GEA_jInAKK7P";
+
+const db =
+supabase.createClient(
+SUPABASE_URL,
+SUPABASE_KEY
+);
+
+async function uploadPost(){
+
+const name =
+document.getElementById("name").value;
+
+const note =
+document.getElementById("note").value;
+
+const file =
+document.getElementById("photo").files[0];
+
+let photoUrl="";
+
+if(file){
+
+const filename =
+Date.now()+"_"+file.name;
+
+const upload =
+await db.storage
+.from("photos")
+.upload(filename,file);
+
+if(upload.error){
+alert(upload.error.message);
+return;
+}
+
+photoUrl =
+db.storage
+.from("photos")
+.getPublicUrl(filename)
+.data.publicUrl;
+}
+
+const insert =
+await db
+.from("posts")
+.insert({
+name:name,
+note:note,
+photo_url:photoUrl
+});
+
+if(insert.error){
+alert(insert.error.message);
+return;
+}
+
+location.reload();
+}
+
+async function loadPosts(){
+
+const res =
+await db
+.from("posts")
+.select("*")
+.order("created_at",
+{ascending:false});
+
+if(res.error){
+posts.innerHTML=
+res.error.message;
+return;
+}
+
+posts.innerHTML =
+res.data.map(p=>`
+
+<div class="card">
+
+<b>${p.name||""}</b>
+
+<p>${p.note||""}</p>
+
+${p.photo_url
+? `<img src="${p.photo_url}">`
+: ""}
+
+</div>
+
+`).join("");
+}
+
+loadPosts();
+
+</script>
+
+</body>
+</html>
