@@ -9,77 +9,52 @@ body{font-family:Arial;max-width:500px;margin:auto;padding:10px}
 input,textarea,button{width:100%;margin:6px 0;font-size:16px;padding:8px;box-sizing:border-box}
 img{max-width:100%;margin-top:8px}
 .card{border:1px solid #ccc;padding:10px;margin:10px 0}
+hr{margin:18px 0}
 </style>
 </head>
 <body>
 
-<div id="login">
-<h2>Giriş</h2>
-<input id="password" type="password" placeholder="Şifre">
-<button onclick="login()">Giriş</button>
-</div>
-
-<div id="app" style="display:none;">
-
-<h2>Asker Notları</h2>
+<h2>Not / Foto Yükle</h2>
 
 <input id="name" placeholder="İsim">
 <textarea id="note" rows="4" placeholder="Not yaz"></textarea>
 <input id="photo" type="file" accept="image/*">
 <button onclick="uploadPost()">Yükle</button>
 
-<hr>
-<div id="posts">Yükleniyor...</div>
+<p id="uploadStatus"></p>
 
+<hr>
+
+<h2>Benim Girişim</h2>
+
+<div id="login">
+<input id="password" type="password" placeholder="Şifre">
+<button onclick="login()">Giriş</button>
+</div>
+
+<div id="viewer" style="display:none;">
+<button onclick="logout()">Çıkış</button>
+<h2>Yüklenenler</h2>
+<div id="posts">Yükleniyor...</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const SUPABASE_URL = "https://jzsavjbjbwdqcswkyayv.supabase.co";
-const SUPABASE_KEY = "sb_publishable_n81KiQgIF7qFJhyR1T8GEA_jInAKK7P";
+var SUPABASE_URL = "https://jzsavjbjbwdqcswkyayv.supabase.co";
+var SUPABASE_KEY = "sb_publishable_n81KiQgIF7qFJhyR1T8GEA_jInAKK7P";
 
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-async function login(){
-  const password = document.getElementById("password").value;
-
-  const res = await db.rpc("check_site_password", {
-    input_password: password
-  });
-
-  if(res.error){
-    alert(res.error.message);
-    return;
-  }
-
-  if(res.data === true){
-    sessionStorage.setItem("askerAuth","1");
-    showApp();
-  } else {
-    alert("Yanlış şifre");
-  }
-}
-
-function showApp(){
-  document.getElementById("login").style.display = "none";
-  document.getElementById("app").style.display = "block";
-  loadPosts();
-}
-
-if(sessionStorage.getItem("askerAuth") === "1"){
-  showApp();
-}
+var db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function compressImage(file){
   return new Promise(function(resolve){
-    const img = new Image();
-    const reader = new FileReader();
+    var img = new Image();
+    var reader = new FileReader();
 
     reader.onload = function(e){
       img.onload = function(){
-        const maxSize = 320;
-        let w = img.width;
-        let h = img.height;
+        var maxSize = 320;
+        var w = img.width;
+        var h = img.height;
 
         if(w > h && w > maxSize){
           h = Math.round(h * maxSize / w);
@@ -89,11 +64,11 @@ async function compressImage(file){
           h = maxSize;
         }
 
-        const canvas = document.createElement("canvas");
+        var canvas = document.createElement("canvas");
         canvas.width = w;
         canvas.height = h;
 
-        const ctx = canvas.getContext("2d");
+        var ctx = canvas.getContext("2d");
         ctx.drawImage(img,0,0,w,h);
 
         canvas.toBlob(function(blob){
@@ -109,17 +84,25 @@ async function compressImage(file){
 }
 
 async function uploadPost(){
-  const name = document.getElementById("name").value;
-  const note = document.getElementById("note").value;
-  const file = document.getElementById("photo").files[0];
+  var name = document.getElementById("name").value;
+  var note = document.getElementById("note").value;
+  var file = document.getElementById("photo").files[0];
+  var status = document.getElementById("uploadStatus");
 
-  let photoUrl = "";
+  if(!name){
+    alert("İsim yaz");
+    return;
+  }
+
+  status.innerHTML = "Yükleniyor...";
+
+  var photoUrl = "";
 
   if(file){
-    const smallPhoto = await compressImage(file);
-    const filename = Date.now() + ".jpg";
+    var smallPhoto = await compressImage(file);
+    var filename = Date.now() + ".jpg";
 
-    const upload = await db.storage
+    var upload = await db.storage
       .from("photos")
       .upload(filename, smallPhoto, {
         contentType:"image/jpeg"
@@ -127,6 +110,7 @@ async function uploadPost(){
 
     if(upload.error){
       alert(upload.error.message);
+      status.innerHTML = "";
       return;
     }
 
@@ -136,7 +120,7 @@ async function uploadPost(){
       .data.publicUrl;
   }
 
-  const insert = await db
+  var insert = await db
     .from("posts")
     .insert({
       name:name,
@@ -146,10 +130,72 @@ async function uploadPost(){
 
   if(insert.error){
     alert(insert.error.message);
+    status.innerHTML = "";
     return;
   }
 
+  document.getElementById("name").value = "";
+  document.getElementById("note").value = "";
+  document.getElementById("photo").value = "";
+
+  status.innerHTML = "Yüklendi.";
+}
+
+async function login(){
+  var password = document.getElementById("password").value;
+
+  try{
+    var res = await db.rpc("check_site_password", {
+      input_password: password
+    });
+
+    if(res.error){
+      alert(res.error.message);
+      return;
+    }
+
+    if(res.data === true){
+      localStorage.setItem("viewPassword", password);
+      showViewer();
+    } else {
+      alert("Yanlış şifre");
+    }
+  } catch(e){
+    alert(String(e));
+  }
+}
+
+function showViewer(){
+  document.getElementById("login").style.display = "none";
+  document.getElementById("viewer").style.display = "block";
+  loadPosts();
+}
+
+function logout(){
+  localStorage.removeItem("viewPassword");
   location.reload();
+}
+
+async function loadPosts(){
+  var password = localStorage.getItem("viewPassword");
+
+  var res = await db.rpc("get_private_posts", {
+    input_password: password
+  });
+
+  if(res.error){
+    document.getElementById("posts").innerHTML = res.error.message;
+    return;
+  }
+
+  document.getElementById("posts").innerHTML =
+    res.data.map(function(p){
+      return '<div class="card">' +
+        '<b>' + escapeHtml(p.name || "") + '</b>' +
+        '<p>' + escapeHtml(p.note || "") + '</p>' +
+        (p.photo_url ? '<img src="' + p.photo_url + '">' : '') +
+      '</div>';
+    }).join("");
 }
 
 function escapeHtml(text){
@@ -164,26 +210,8 @@ function escapeHtml(text){
   });
 }
 
-async function loadPosts(){
-  const res = await db
-    .from("posts")
-    .select("*")
-    .order("created_at",{ascending:false});
-
-  if(res.error){
-    posts.innerHTML = res.error.message;
-    return;
-  }
-
-  posts.innerHTML = res.data.map(function(p){
-    return `
-      <div class="card">
-        <b>${escapeHtml(p.name || "")}</b>
-        <p>${escapeHtml(p.note || "")}</p>
-        ${p.photo_url ? `<img src="${p.photo_url}">` : ""}
-      </div>
-    `;
-  }).join("");
+if(localStorage.getItem("viewPassword")){
+  showViewer();
 }
 </script>
 
