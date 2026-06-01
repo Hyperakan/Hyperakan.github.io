@@ -57,7 +57,6 @@ Yükleniyor...
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
-
 const SUPABASE_URL =
 "https://jzsavjbjbwdqcswkyayv.supabase.co";
 
@@ -70,6 +69,51 @@ SUPABASE_URL,
 SUPABASE_KEY
 );
 
+async function compressImage(file){
+return new Promise(function(resolve){
+const img = new Image();
+const reader = new FileReader();
+
+reader.onload = function(e){
+img.onload = function(){
+
+const maxSize = 320;
+let w = img.width;
+let h = img.height;
+
+if(w > h && w > maxSize){
+h = Math.round(h * maxSize / w);
+w = maxSize;
+}
+else if(h > maxSize){
+w = Math.round(w * maxSize / h);
+h = maxSize;
+}
+
+const canvas =
+document.createElement("canvas");
+
+canvas.width = w;
+canvas.height = h;
+
+const ctx =
+canvas.getContext("2d");
+
+ctx.drawImage(img,0,0,w,h);
+
+canvas.toBlob(function(blob){
+resolve(blob);
+},"image/jpeg",0.45);
+
+};
+
+img.src = e.target.result;
+};
+
+reader.readAsDataURL(file);
+});
+}
+
 async function uploadPost(){
 
 const name =
@@ -81,17 +125,22 @@ document.getElementById("note").value;
 const file =
 document.getElementById("photo").files[0];
 
-let photoUrl="";
+let photoUrl = "";
 
 if(file){
 
+const smallPhoto =
+await compressImage(file);
+
 const filename =
-Date.now()+"_"+file.name;
+Date.now() + ".jpg";
 
 const upload =
 await db.storage
 .from("photos")
-.upload(filename,file);
+.upload(filename,smallPhoto,{
+contentType:"image/jpeg"
+});
 
 if(upload.error){
 alert(upload.error.message);
@@ -122,41 +171,47 @@ return;
 location.reload();
 }
 
+function escapeHtml(text){
+return String(text).replace(/[&<>"']/g,function(m){
+return {
+"&":"&amp;",
+"<":"&lt;",
+">":"&gt;",
+'"':"&quot;",
+"'":"&#039;"
+}[m];
+});
+}
+
 async function loadPosts(){
 
 const res =
 await db
 .from("posts")
 .select("*")
-.order("created_at",
-{ascending:false});
+.order("created_at",{ascending:false});
 
 if(res.error){
-posts.innerHTML=
+posts.innerHTML =
 res.error.message;
 return;
 }
 
 posts.innerHTML =
-res.data.map(p=>`
+res.data.map(function(p){
 
+return `
 <div class="card">
-
-<b>${p.name||""}</b>
-
-<p>${p.note||""}</p>
-
-${p.photo_url
-? `<img src="${p.photo_url}">`
-: ""}
-
+<b>${escapeHtml(p.name || "")}</b>
+<p>${escapeHtml(p.note || "")}</p>
+${p.photo_url ? `<img src="${p.photo_url}">` : ""}
 </div>
+`;
 
-`).join("");
+}).join("");
 }
 
 loadPosts();
-
 </script>
 
 </body>
