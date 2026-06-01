@@ -2,93 +2,83 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Admin</title>
+<meta http-equiv="Cache-Control" content="no-cache">
+<meta http-equiv="Pragma" content="no-cache">
 <style>
-body{font-family:Arial;max-width:500px;margin:auto;padding:10px}
-img{max-width:100%;height:auto}
-.card{border:1px solid #ccc;padding:10px;margin:10px 0}
+body{font-family:Arial;padding:10px}
+img{max-width:300px;height:auto}
+.card{border:1px solid #999;padding:8px;margin:8px 0}
 </style>
 </head>
 <body>
 
 <h2>Yüklenenler</h2>
-<div id="posts">yükleniyor...</div>
+<div id="posts">JS calismadi</div>
 
 <script>
-var SUPABASE_URL = "https://jzsavjbjbwdqcswkyayv.supabase.co";
-var SUPABASE_KEY = "sb_publishable_n81KiQgIF7qFJhyR1T8GEA_jInAKK7P";
+document.getElementById("posts").innerHTML="JS calisti, baglaniyor...";
 
-var password = window.location.hash.replace("#","");
+var SUPABASE_URL="https://jzsavjbjbwdqcswkyayv.supabase.co";
+var SUPABASE_KEY="sb_publishable_n81KiQgIF7qFJhyR1T8GEA_jInAKK7P";
+var PASS=window.location.hash.substring(1);
 
-if(!password){
-  document.getElementById("posts").innerHTML = "şifre yok";
-} else {
-  loadPosts();
+if(!PASS){
+document.getElementById("posts").innerHTML="sifre yok";
+}
+else{
+var xhr=new XMLHttpRequest();
+
+xhr.open("POST",SUPABASE_URL+"/rest/v1/rpc/get_private_posts",true);
+
+xhr.setRequestHeader("Content-Type","application/json");
+xhr.setRequestHeader("apikey",SUPABASE_KEY);
+xhr.setRequestHeader("Authorization","Bearer "+SUPABASE_KEY);
+
+xhr.onreadystatechange=function(){
+
+if(xhr.readyState==4){
+
+if(xhr.status!=200){
+document.getElementById("posts").innerHTML=
+"hata: "+xhr.status+"<br>"+xhr.responseText;
+return;
 }
 
-function loadPosts(){
-  var xhr = new XMLHttpRequest();
+var data=JSON.parse(xhr.responseText);
+var html="";
 
-  xhr.open(
-    "POST",
-    SUPABASE_URL + "/rest/v1/rpc/get_private_posts",
-    true
-  );
+for(var i=0;i<data.length;i++){
 
-  xhr.setRequestHeader("Content-Type","application/json");
-  xhr.setRequestHeader("apikey",SUPABASE_KEY);
-  xhr.setRequestHeader("Authorization","Bearer " + SUPABASE_KEY);
+html+="<div class='card'>";
+html+="<b>"+safe(data[i].name)+"</b>";
+html+="<p>"+safe(data[i].note)+"</p>";
 
-  xhr.onreadystatechange = function(){
-    if(xhr.readyState === 4){
-
-      if(xhr.status !== 200){
-        document.getElementById("posts").innerHTML =
-          "hata: " + xhr.status + "<br>" + xhr.responseText;
-        return;
-      }
-
-      var data = JSON.parse(xhr.responseText);
-      var html = "";
-
-      for(var i=0; i<data.length; i++){
-        var p = data[i];
-
-        html += '<div class="card">';
-        html += '<b>' + escapeHtml(p.name || "") + '</b>';
-        html += '<p>' + escapeHtml(p.note || "") + '</p>';
-
-        if(p.photo_url){
-          html += '<img src="' + p.photo_url + '">';
-        }
-
-        html += '</div>';
-      }
-
-      if(html === ""){
-        html = "henüz yükleme yok";
-      }
-
-      document.getElementById("posts").innerHTML = html;
-    }
-  };
-
-  xhr.send(JSON.stringify({
-    input_password: password
-  }));
+if(data[i].photo_url){
+html+="<img src='"+data[i].photo_url+"'>";
 }
 
-function escapeHtml(text){
-  return String(text).replace(/[&<>"']/g,function(m){
-    return {
-      "&":"&amp;",
-      "<":"&lt;",
-      ">":"&gt;",
-      '"':"&quot;",
-      "'":"&#039;"
-    }[m];
-  });
+html+="</div>";
+}
+
+if(html==""){
+html="kayit yok";
+}
+
+document.getElementById("posts").innerHTML=html;
+}
+
+};
+
+xhr.send("{\"input_password\":\""+PASS+"\"}");
+}
+
+function safe(t){
+if(!t){return "";}
+return String(t)
+.replace(/&/g,"&amp;")
+.replace(/</g,"&lt;")
+.replace(/>/g,"&gt;");
 }
 </script>
 
